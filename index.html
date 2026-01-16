@@ -1,0 +1,75 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GRANITE.io — Registre Cimetière</title>
+  https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;900&display=swap
+  https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css
+  https://unpkg.com/leaflet@1.9.4/dist/leaflet.css
+  styles.css
+</head>
+<body>
+  <header class="top-nav">
+    <div class="container-flex">
+      <div class="logo">GRANITE<span>.io</span></div>
+      <div class="system-status">
+        <span class="dot"></span> Système synchronisé
+      </div>
+    </div>
+  </header>
+
+  <main class="main-wrapper">
+    <div class="container">
+      <div class="hero-section">
+        <p class="subtitle">Interface d'administration</p>
+        <h1>Registre Numérique<br>Cimetière <span>/</span></h1>
+        <p class="tagline">Accès sécurisé aux archives et emplacements funéraires</p>
+      </div>
+
+      <section class="search-container">
+        <form id="searchForm" class="search-inner">
+          <div class="search-field">
+            <label>Rechercher</label>
+            <input type="text" id="searchInput" placeholder="Nom du défunt">
+          </div>
+          <div class="search-field border-left">
+            <label>Lieu</label>
+            <input type="text" id="locationInput" placeholder="Ville de naissance">
+          </div>
+          <button type="submit" class="btn-filter">Filtrer la base</button>
+        </form>
+      </section>
+
+      <div id="resultsCount" class="results-info">Initialisation...</div>
+      <div id="resultsGrid" class="cards-grid"></div>
+    </div>
+  </main>
+
+  <div id="detailModal" class="modal">
+    <div class="modal-content">
+      <span class="close-btn">×</span>
+      <div id="printArea">
+        <div class="fiche-header">
+          <i class="fas fa-file-invoice" style="font-size: 1.5rem; color: #0084ff;"></i>
+          <h2 id="ficheNom">Détails de la fiche</h2>
+        </div>
+        <div class="fiche-grid">
+          <div class="fiche-col">
+            <div id="modalData"></div>
+          </div>
+          <div class="fiche-col">
+            <div id="modalPhoto" class="img-preview"></div>
+            <div id="map"></div>
+          </div>
+        </div>
+      </div>
+      <button onclick="window.print()" class="btn-print"><i class="fas fa-print"></i> Imprimer le rapport complet</button>
+    </div>
+  </div>
+
+  https://unpkg.com/leaflet@1.9.4/dist/leaflet.js</script>
+  script.js</script>
+</body>
+</html>
