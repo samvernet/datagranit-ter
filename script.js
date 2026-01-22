@@ -1,86 +1,158 @@
+/* ===============================
+ GRANITE.io — script.js
+ =============================== */
+
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyVcpBmxBxS-TWrnzxXI1qV3FxvTzUomXcO6Uq5TJq5UPxUOpxKjv8OdTLC5HujczvF/exec';
 
 let allData = [];
 let map = null;
 
-async function init() {
-    try {
-        const response = await fetch(SCRIPT_URL);
-        allData = await response.json();
-        document.getElementById('resultsCount').textContent = allData.length + " enregistrements trouvés";
-        render(allData);
-    } catch (e) { document.getElementById('resultsCount').textContent = "Erreur de synchronisation"; }
+/* ========== HELPERS GÉNÉRAUX ========== */
+
+function normalizeText(str) {
+  if (!str) return '';
+  return str.toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/['’\-_.]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+function getFullName(item) {
+  if (item['prénom nom']) return item['prénom nom'];
+  if (item['Prénom nom']) return item['Prénom nom'];
+  if (item.Prénom && item.Nom) return `${item.Prénom} ${item.Nom}`;
+  return item.Nom || '—';
+}
+
+// Fonction de nettoyage d'image ultra-robuste
 function getCleanImgUrl(url) {
-    if (!url) return null;
-    if (url.startsWith('data:image')) return url;
-    if (url.length > 500) return `data:image/jpeg;base64,${url}`;
-    if (url.includes('drive.google.com')) {
-        const fileId = url.split('/d/')[1]?.split('/')[0] || url.split('id=')[1];
-        return `https://docs.google.com/uc?export=view&id=${fileId}`;
-    }
-    return url;
+  if (!url) return null;
+  
+  const u = url.toString().trim().replace(/&amp;/g, '&');
+
+  // Extraction de l'ID Google Drive
+  const driveRegex = /[-\w]{25,}/; 
+  const match = u.match(driveRegex);
+  
+  if (match && u.includes('drive.google.com')) {
+    const fileId = match[0];
+    // Ce lien est souvent beaucoup plus stable que le lien "uc"
+    return `https://lh3.googleusercontent.com/d/${fileId}`;
+  }
+  
+  return u;
 }
 
+function getEtatStele(item) {
+  return item['Etat de la stèle'] ?? item['État de la stèle'] ?? item['Etat stèle'] ?? item['État stèle'] ?? null;
+}
+
+/* ========== INITIALISATION ========== */
+async function init() {
+  try {
+    const response = await fetch(SCRIPT_URL);
+    allData = await response.json();
+    document.getElementById('resultsCount').textContent = allData.length + ' enregistrements trouvés';
+    render(allData);
+  } catch (e) {
+    console.error(e);
+    document.getElementById('resultsCount').textContent = 'Erreur de synchronisation';
+  }
+}
+
+/* ========== RENDU LISTE ========== */
 function render(data) {
-    const grid = document.getElementById('resultsGrid');
-    grid.innerHTML = data.map((item, index) => `
-        <div class="card" onclick="showFiche(${index})">
-            <h3>${item['prénom nom'] || (item.Prénom + ' ' + item.Nom)}</h3>
-            <p><i class="fas fa-calendar-alt"></i> ${item['Date de naissance'] || '-'}</p>
-            <div class="status-pill">${item.Etat || 'fiche disponible'}</div>
-        </div>
-    `).join('');
+  const grid = document.getElementById('resultsGrid');
+  grid.innerHTML = data.map((item, index) => {
+    const badge = getEtatStele(item) ?? item.Etat ?? item['État'] ?? '—';
+    return `
+      <div class="card" onclick="showFiche(${index})">
+        <h3>${getFullName(item)}</h3>
+        <p>${item['Date de naissance'] ?? item['Naissance'] ?? '—'}</p>
+        <span class="status-pill">${badge}</span>
+      </div>`;
+  }).join('');
 }
 
-function showFiche(index) {
-    const item = window.currentFiltered ? window.currentFiltered[index] : allData[index];
-    const lat = parseFloat(item.Lat || item.X);
-    const lng = parseFloat(item.Long || item.Y);
+/* ========== FICHE (MODALE) ========== */
+window.showFiche = function (index) {
+  // Gestion de l'index selon si on a filtré ou non
+  const item = window.currentFiltered ? window.currentFiltered[index] : allData[index];
 
-    document.getElementById('modalData').innerHTML = `
-        <div class="info-row"><i class="fas fa-user"></i><div><label>Identité du défunt</label><span>${item['prénom nom'] || (item.Prénom + ' ' + item.Nom)}</span></div></div>
-        <div class="info-row"><i class="fas fa-history"></i><div><label>Naissance & Décès</label><span>${item['Date de naissance'] || '?'} <br> ${item['Date de décés'] || '?'}</span></div></div>
-        <div class="info-row"><i class="fas fa-map-marked-alt"></i><div><label>Localisation</label><span>Secteur ${item.Section || '-'} / N° ${item.Numéro || '-'}</span></div></div>
-        <div class="info-row"><i class="fas fa-clock"></i><div><label>Échéance Concession</label><span style="color:#ef4444;">${item['Date de renouvellement'] || 'Non spécifiée'}</span></div></div>
-        <div class="info-row"><i class="fas fa-monument"></i><div><label>État de la stèle</label><span>${item['Etat de la stèle'] || 'Non renseigné'}</span></div></div>
-        <div class="info-row"><i class="fas fa-crosshair"></i><div><label>Précision GPS</label><span style="font-family:monospace;">${lat || 'N/A'}, ${lng || 'N/A'}</span></div></div>
-    `;
+  const lat = parseFloat(item.Lat ?? item.X);
+  const lng = parseFloat(item.Long ?? item.Y);
+  const fullName = getFullName(item);
 
-    const photoUrl = getCleanImgUrl(item['Url photo stèle']);
-    document.getElementById('modalPhoto').innerHTML = photoUrl ? `<img src="${photoUrl}">` : `<div style="height:100px; background:#f8fafc; border-radius:20px; display:flex; align-items:center; justify-content:center; color:#cbd5e1;"><i class="fas fa-camera-slash"></i></div>`;
+  // Mise à jour des textes de la fiche
+  document.getElementById('ficheNom').textContent = fullName;
+  document.getElementById('modalData').innerHTML = `
+    <div class="info-row"><i class="fas fa-user"></i><div><label>Identité</label><span>${fullName}</span></div></div>
+    <div class="info-row"><i class="fas fa-history"></i><div><label>Naissance & Décès</label><span>${item['Date de naissance'] ?? '—'}<br>${item['Date de décès'] ?? '—'}</span></div></div>
+    <div class="info-row"><i class="fas fa-location-dot"></i><div><label>Localisation</label><span>Secteur ${item.Section ?? '—'} / N° ${item.Numéro ?? '—'}</span></div></div>
+    <div class="info-row"><i class="fas fa-calendar"></i><div><label>Échéance</label><span>${item['Date de renouvellement'] ?? 'Non spécifiée'}</span></div></div>
+    <div class="info-row"><i class="fas fa-monument"></i><div><label>État stèle</label><span>${getEtatStele(item) ?? 'Non renseigné'}</span></div></div>
+  `;
 
-    document.getElementById('detailModal').style.display = "block";
+  /* ========== AFFICHAGE PHOTO ========== */
+  // On cherche l'URL dans les colonnes possibles
+  const rawUrl = item['Url photo stèle'] || item['Url photo stele'] || item['Photo'] || item['photo'];
+  const photoUrl = getCleanImgUrl(rawUrl);
+  const box = document.getElementById('modalPhoto');
+  
+  box.innerHTML = ''; // Nettoyage avant injection
 
-    setTimeout(() => {
-        if (map) { map.remove(); map = null; }
-        if (!isNaN(lat) && !isNaN(lng)) {
-            map = L.map('map').setView([lat, lng], 19);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-            L.marker([lat, lng]).addTo(map);
-            map.invalidateSize();
-        }
-    }, 450);
-}
+  if (photoUrl) {
+    const img = document.createElement('img');
+    img.src = photoUrl;
+    img.style.width = "100%";
+    img.style.borderRadius = "20px";
+    img.style.display = "block";
+    img.style.marginBottom = "15px";
+    
+    // Si l'image bloque encore (droits Drive), on affiche un message
+    img.onerror = () => {
+      box.innerHTML = '<p style="color:#64748b; font-size:0.8rem; padding:20px; border:1px dashed #ccc; border-radius:20px;">Lien valide mais image inaccessible. Vérifiez que le dossier Drive est bien en accès "Tous les utilisateurs disposant du lien".</p>';
+    };
+    box.appendChild(img);
+  } else {
+    box.innerHTML = '<p style="color:#64748b; font-size:0.8rem; padding:20px;">Aucune photo disponible pour cette fiche.</p>';
+  }
 
-document.querySelector('.close-btn').onclick = () => { document.getElementById('detailModal').style.display = "none"; };
-window.onclick = (e) => { if (e.target == document.getElementById('detailModal')) { document.getElementById('detailModal').style.display = "none"; } };
-
-document.getElementById('searchForm').onsubmit = (e) => {
-    e.preventDefault();
-    const q = document.getElementById('searchInput').value.toLowerCase();
-    const l = document.getElementById('locationInput').value.toLowerCase();
-    const s = document.getElementById('statusSelect').value;
-    const filtered = allData.filter(i => {
-        const n = (i['prénom nom'] || "").toLowerCase();
-        const loc = (i['Ville de naissance'] || "").toLowerCase();
-        const stat = i.Etat || "";
-        return n.includes(q) && loc.includes(l) && (!s || stat === s);
-    });
-    window.currentFiltered = filtered;
-    render(filtered);
-    document.getElementById('resultsCount').textContent = filtered.length + " enregistrements trouvés";
+  /* ========== CARTE ========== */
+  document.getElementById('detailModal').style.display = 'block';
+  setTimeout(() => {
+    if (map) map.remove();
+    if (!isNaN(lat) && !isNaN(lng)) {
+      map = L.map('map').setView([lat, lng], 19);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+      L.marker([lat, lng]).addTo(map);
+      map.invalidateSize();
+    }
+  }, 350);
 };
 
-init();
+/* ========== RECHERCHE & EVENEMENTS ========== */
+document.addEventListener('DOMContentLoaded', () => {
+  // Fermeture modale
+  document.querySelector('.close-btn').onclick = () => document.getElementById('detailModal').style.display = 'none';
+  window.onclick = (e) => { if (e.target === document.getElementById('detailModal')) document.getElementById('detailModal').style.display = 'none'; };
+
+  // Formulaire de recherche
+  document.getElementById('searchForm').onsubmit = (e) => {
+    e.preventDefault();
+    const q = normalizeText(document.getElementById('searchInput').value);
+    
+    const filtered = allData.filter(i => {
+      const name = normalizeText(getFullName(i));
+      return name.includes(q);
+    });
+
+    window.currentFiltered = filtered;
+    render(filtered);
+    document.getElementById('resultsCount').textContent = filtered.length + ' enregistrements trouvés';
+  };
+
+  // Recherche en temps réel
+  document.getElementById('searchInput').addEventListener('input', () => {
+     document.getElementById('searchForm').dispatchEvent(new Event('submit'));
+  });
+
+  init();
+});
